@@ -1,0 +1,20 @@
+
+- name: Transfer dependencies
+  copy: src=binaries/influxdb-0.12.1-1.x86_64.rpm dest=/tmp
+
+- name: Install Influxdb
+  yum: name=/tmp/influxdb-0.12.1-1.x86_64.rpm state=present
+
+- name: Create/Ensure data dir for Influxdb
+  file:
+    state: directory
+    path: "{{ influxdb.data_dir }}"
+    mode: 0755
+    recurse: yes
+    owner: influxdb
+    group: influxdb
+
+- name: Update Influxdb configuration
+  template: src=templates/influxdb.conf.j2 dest=/etc/influxdb/influxdb.conf
+  notify:
+    - restart influxdb

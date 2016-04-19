@@ -1,0 +1,5 @@
+app_env: test-cluster
+influxdb:
+  hostname: localhost
+  port: 8086
+  data_dir: /grid/influxdb

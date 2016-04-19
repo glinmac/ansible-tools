@@ -1,0 +1,7 @@
+- name: install default packages
+  yum: name={{ item }} state=latest
+  with_items:
+    - libselinux-python        
+
+- name: disable selinux
+  selinux: state=disabled

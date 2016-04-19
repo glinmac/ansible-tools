@@ -1,0 +1,11 @@
+
+- name: Transfer dependencies
+  copy: src=binaries/telegraf-0.12.0-1.x86_64.rpm dest=/tmp
+
+- name: Install telegraf
+  yum: name=/tmp/telegraf-0.12.0-1.x86_64.rpm state=present
+
+- name: Update telegraf config
+  template: src=templates/telegraf.conf.j2 dest=/etc/telegraf/telegraf.conf
+  notify:
+    - restart telegraf
