@@ -1,0 +1,22 @@
+---
+
+- hosts: all
+  vars:
+    env: PROD
+    user: someuser
+  tasks:
+
+    - name: Deploy public keys
+      authorized_key: user="{{ user }}" key="{{ item }}"
+      with_file:
+        - "authorized_keys/{{ user }}.pub"
+      tags:
+        - ssh
+
+    - name: Customize PS1
+      lineinfile:
+        dest: "$HOME/.bash_profile"
+        line: export PS1='[{{ env }}]\[\033[02;32m\]\u@\H:\[\033[02;34m\]\w\$\[\033[00m\] '
+      tags:
+        - shell
+
