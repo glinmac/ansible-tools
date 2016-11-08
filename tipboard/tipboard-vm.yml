@@ -1,0 +1,109 @@
+#
+# Setup the Tipboard VM from a clean centos 6.8 image
+#
+- hosts: tipboard
+  vars:
+     http_proxy: http://yourproxy
+     tipboard_user: tipboard
+     tipboard_password: password
+     tipboard_external_port: 80
+     tipboard_internal_port: 8080
+     tipboard_htpasswd: /etc/nginx/.tipboard.htpasswd
+  become: yes
+  tasks:
+
+    - name: Disable firewall
+      service: name=iptables state=stopped enabled=false
+
+    - name: set up http proxy for yum
+      lineinfile: dest=/etc/yum.conf state=present line="proxy={{ http_proxy }}"
+
+    - name: insure additional yum repositories are available
+      yum: name={{ item }} state=latest
+      with_items:
+        - epel-release
+        - centos-release-scl
+
+    - name: install packages
+      yum: name={{ item }} state=latest
+      with_items:
+        - nginx
+        - httpd-tools
+        - libselinux-python
+        - redis
+        - python27
+        - python27-python-virtualenv
+        - python27-python-pip
+        - supervisor
+
+    - name: disable selinux
+      selinux: state=disabled
+
+    - name: generate htpasswd for nginx
+      command: htpasswd -bc {{ tipboard_htpasswd }} {{ tipboard_user }} {{ tipboard_password }}
+
+    - name: fix htpasswd permission
+      file: path={{ tipboard_htpasswd }} mode=0640 owner=nginx group=nginx
+
+    - name: deploy nginx config
+      template: src=templates/tipboard.conf.j2 dest=/etc/nginx/conf.d/tipboard.conf owner=root group=root mode=0644
+
+    - name: remove old nginx config
+      file: name=/etc/nginx/conf.d/default.conf state=absent
+
+    - name: download jdk
+      shell:
+        "curl -L  -H 'Cookie:oraclelicense=accept-securebackup-cookie' -o /tmp/jdk-8u111-linux-x64.rpm http://download.oracle.com/otn-pub/java/jdk/8u111-b14/jdk-8u111-linux-x64.rpm"
+      args:
+        creates: /tmp/jdk-8u111-linux-x64.rpm
+      environment:
+        http_proxy: "{{ http_proxy }}"
+        https_proxy: "{{ http_proxy }}"
+
+    - name: install jdk
+      yum: name=/tmp/jdk-8u111-linux-x64.rpm state=present
+
+    - name: set JAVA_HOME
+      template: src=templates/java.sh.j2 dest=/etc/profile.d/java.sh owner=root group=root mode=0755
+
+    - name: make sure services restart at reboot
+      service: name={{ item }} enabled=yes state=restarted
+      with_items:
+        - nginx
+        - redis
+        - supervisord
+
+    - name: add ldconfig for python27
+      lineinfile: dest=/etc/ld.so.conf.d/python27.conf line="/opt/rh/python27/root/usr/lib64/" create=yes
+
+    - name: run ldconfig
+      shell: ldconfig
+
+    - name: create tipboard user
+      user: name={{ tipboard_user }} state=present shell=/sbin/nologin
+
+    - name: create python virtualenv for tipboard
+      become_user: {{ tipboard_user }}
+      pip:
+        chdir: /home/{{ tipboard_user }}
+        name: tipboard
+        virtualenv: tb-env
+        virtualenv_python: /opt/rh/python27/root/usr/bin/python
+        virtualenv_command: /opt/rh/python27/root/usr/bin/virtualenv-2.7
+      environment:
+        http_proxy: "{{http_proxy}}"
+        https_proxy: "{{http_proxy}}"
+
+    - name: register tipboard with supervisord
+      blockinfile:
+        dest: /etc/supervisord.conf
+        block: |
+          [program:tipboard]
+          command=/home/{{tipboard_user}}/tb-env/bin/tipboard runserver 127.0.0.1 {{ tipboard_internal_port }}
+          process_name=tipboard runserver
+          user={{tipboard_user}}
+      tags:
+        - debug
+
+    - name: restart supervisord
+      service: name=supervisord state=restarted

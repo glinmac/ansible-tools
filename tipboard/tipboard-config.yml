@@ -1,0 +1,44 @@
+#
+# Setup the tipboard configuration
+#
+- hosts: tipboard
+  vars:
+     tipboard_user: tipboard
+     tipboard_password: password
+     project_name: tipboard_test
+     api_key: thisshouldbearandomkey
+  become: yes
+  tasks:
+
+    - name: Create tipboard project
+      become_user: tipboard
+      command: "/home/{{ tipboard_user }}/tb-env/bin/tipboard create_project {{ project_name }}"
+      args:
+        creates: "/home/{{ tipboard_user }}/.tipboard/settings-local.py"
+
+    - name: Configure tipboard settings
+      template:
+        dest: /home/{{ tipboard_user }}/.tipboard/settings-local.py
+        src: tipboard-config/settings-local.py.j2
+        mode: 0640
+        owner: "{{ tipboard_user }}"
+        group: "{{ tipboard_user }}"
+      register: config
+
+    - name: Setup dashboard
+      template:
+        dest: /home/{{ tipboard_user }}/.tipboard/{{ item }}.yaml
+        src: tipboard-config/{{ item }}.yaml
+        mode: 0640
+        owner: "{{ tipboard_user }}"
+        group: "{{ tipboard_user }}"
+      with_items:
+        - layout_config
+        - dashboard_1
+      register: dashboard
+
+
+    - name: restart tipboard on changes
+      command: "pkill -f 'tipboard runserver'"
+      when: config.changed or dashboard.changed
+
