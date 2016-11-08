@@ -1,0 +1,11 @@
+---
+
+- hosts: ambari-agent ambari-server
+  become: yes
+  tasks:
+
+    - name: Deploy yum repositories
+      copy:
+        src: templates/ambari-2.4.1.0.repo
+        dest: /etc/yum.repos.d/ambari-2.4.1.0.repo
+
